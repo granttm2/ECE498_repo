@@ -89,7 +89,6 @@ __interrupt void ADCD_ISR(void)
     }
     if (LowRes > Period - 2) {
         LowRes = Period - 1;
-        HighRes = 0;
     }
     EPwm1Regs.CMPA.bit.CMPA = LowRes;
     EPwm1Regs.CMPC = LowRes/2;

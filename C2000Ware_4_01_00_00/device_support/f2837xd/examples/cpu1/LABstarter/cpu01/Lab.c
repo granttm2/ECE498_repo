@@ -49,7 +49,7 @@ uint32_t LowRes = 0;
 uint32_t Period = 1667;  //60Khz
 
 
-float dutyoffset = 0.3;
+float dutyoffset = 0.5;
 
 
 //adcd1 pie interrupt
@@ -64,15 +64,15 @@ __interrupt void ADCD_ISR(void)
     VoltageFeedback = adcd0result*3.0/4096.0;
 
     if (ADCD_count%40000 == 0) {
-        if (duty > 0.2) {  // open loop step for system identification comment this out when implementing your controller
-            duty = 0.15;
+        if (duty > 0.5) {  // open loop step for system identification comment this out when implementing your controller
+            duty = 0.45;
         } else {
-            duty = 0.5;
+            duty = 0.55;
         }
-//        if (stepVolt > .9) {  // This is help to create your reference step to your controller
-//            stepVolt = 0.5;
+//        if (stepVolt > 1.1) {  // This is help to create your reference step to your controller
+//            stepVolt = 0.9;
 //        } else {
-//            stepVolt = StepHigh;
+//            stepVolt = 1.3;
 //        }
     }
 

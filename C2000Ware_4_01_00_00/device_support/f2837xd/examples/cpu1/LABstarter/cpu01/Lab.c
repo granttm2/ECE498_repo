@@ -100,6 +100,7 @@ __interrupt void ADCD_ISR(void)
     // Here write duty/control effort value to DACA
     dacout = duty;
     setDACA(dacout);
+	setDACB(VoltageFeedback);
 
     ADCD_count++;
 

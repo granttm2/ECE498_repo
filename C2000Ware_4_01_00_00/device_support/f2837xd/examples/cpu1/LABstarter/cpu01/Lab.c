@@ -35,6 +35,8 @@ float VoltageFeedback = 0;
 float dacout = 0;
 int16_t adcd0result = 0;
 int16_t adcd1result = 0;
+float dutyStartOpenLoopStep = 0.45;
+float StepSizeOpenLoop = 0.1;
 
 // Count variables
 uint32_t numSWIcalls = 0;
@@ -64,15 +66,15 @@ __interrupt void ADCD_ISR(void)
     VoltageFeedback = adcd0result*3.0/4096.0;
 
     if (ADCD_count%40000 == 0) {
-        if (duty > 0.5) {  // open loop step for system identification comment this out when implementing your controller
-            duty = 0.45;
+        if (duty > dutyStartOpenLoopStep+(StepSizeOpenLoop/2.0)) {  // open loop step for system identification comment this out when implementing your controller
+            duty = dutyStartOpenLoopStep;
         } else {
-            duty = 0.55;
+            duty = dutyStartOpenLoopStep+StepSizeOpenLoop;
         }
-//        if (stepVolt > 1.1) {  // This is help to create your reference step to your controller
-//            stepVolt = 0.9;
+//        if (stepVolt > stepStart+(StepSize/2.0)) {  // This is help to create your reference step to your controller
+//            stepVolt = stepStart;
 //        } else {
-//            stepVolt = 1.3;
+//            stepVolt = stepStart+StepSize;
 //        }
     }
 

@@ -48,12 +48,13 @@ float PIduty=0;
 float Integral_current=0;
 
 //
+float CurrentFeedback = 0;
 float VoltageFeedback = 0;
 float dacout = 0;
 int16_t adcd0result = 0;
 int16_t adcd1result = 0;
-float dutyStartOpenLoopStep = 0.4;
-float StepSizeOpenLoop = 0.3;
+float dutyStartOpenLoopStep = 0.5;
+float StepSizeOpenLoop = 0.0;
 
 
 // Count variables
@@ -82,7 +83,8 @@ __interrupt void ADCD_ISR(void)
     adcd1result = AdcdResultRegs.ADCRESULT1;
 
     // Here covert ADCIND0 to volts
-    VoltageFeedback = adcd0result*3.0/4096.0;
+    VoltageFeedback = adcd0result*((3.0)/4096.0)*1.1255;
+    CurrentFeedback = adcd1result*(3.0/4096.0)*5.6292;
 
     if (ADCD_count%40000 == 0) {
         if (duty > dutyStartOpenLoopStep+(StepSizeOpenLoop/2.0)) {  // open loop step for system identification comment this out when implementing your controller

@@ -35,11 +35,12 @@ int32_t ADCD_count = 0;
 int16_t blue_ratio = 25;
 int16_t red_ratio = 100;
 float VoltageFeedback = 0;
+float CurrentFeedback = 0;
 float dacout = 0;
 int16_t adcd0result = 0;
 int16_t adcd1result = 0;
-float dutyStartOpenLoopStep = 0.4;
-float StepSizeOpenLoop = 0.3;
+float dutyStartOpenLoopStep = 0.5;
+float StepSizeOpenLoop = 0.0;
 
 // Count variables
 uint32_t numSWIcalls = 0;
@@ -67,6 +68,7 @@ __interrupt void ADCD_ISR(void)
 
     // Here covert ADCIND0 to volts
     VoltageFeedback = adcd0result*3.0/4096.0;
+    CurrentFeedback = adcd1result*3.0/4096.0;
 
     if (ADCD_count%40000 == 0) {
         if (duty > dutyStartOpenLoopStep+(StepSizeOpenLoop/2.0)) {  // open loop step for system identification comment this out when implementing your controller

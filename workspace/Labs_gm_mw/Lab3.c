@@ -32,6 +32,7 @@ __interrupt void ADCD_ISR(void);
 
 uint32_t sampling_offset = 0;
 int32_t ADCD_count = 0;
+int32_t counter=0;
 int16_t blue_ratio = 25;
 int16_t red_ratio = 100;
 float VoltageFeedback = 0;
@@ -53,38 +54,33 @@ uint32_t LowRes = 0;
 //uint32_t Period = 5000;  //20Khz
 //uint32_t Period = 2000;  //50Khz
 uint32_t Period = 1667;  //60Khz
-
+uint32_t var = 40000;
 
 float dutyoffset = 0.5;
 
 
 //adcd1 pie interrupt
+/*
 __interrupt void ADCD_ISR(void)
 {
+    ADCD_count++;
+}
+*/
+__interrupt void ADCD_ISR(void)
+{
+    //ADCD_count++;
     GpioDataRegs.GPBSET.bit.GPIO52 = 1;  // Set GPIO52 high to scope for code timing on Oscilloscope
 
     adcd0result = AdcdResultRegs.ADCRESULT0;
     adcd1result = AdcdResultRegs.ADCRESULT1;
 
     // Here covert ADCIND0 to volts
-    VoltageFeedback = adcd0result*3.0/4096.0;
-    CurrentFeedback = adcd1result*3.0/4096.0;
+    VoltageFeedback = adcd0result*((3.0)/4096.0)*1.1255;
+    CurrentFeedback = adcd1result*(3.0/4096.0)*5.6292;
 
-    if (ADCD_count%40000 == 0) {
-        if (duty > dutyStartOpenLoopStep+(StepSizeOpenLoop/2.0)) {  // open loop step for system identification comment this out when implementing your controller
-            duty = dutyStartOpenLoopStep;
-        } else {
-            duty = dutyStartOpenLoopStep+StepSizeOpenLoop;
-        }
-//        if (stepVolt > stepStart+(StepSize/2.0)) {  // This is help to create your reference step to your controller
-//            stepVolt = stepStart;
-//        } else {
-//            stepVolt = stepStart+StepSize;
-//        }
-    }
+    duty = dutyStartOpenLoopStep;
 
-// you will calculate your controller here and then the final duty percentage need dutty offset added to the controller's calculated duty cycle.
-//    duty = PIduty+dutyoffset;
+// you will calculate your controller here and then the final duty percentage need duty offset added to the controller's calculated duty cycle.
 
     if (duty < 0.1) duty = 0.1;
     if (duty > 0.9) duty = 0.9;
@@ -99,7 +95,7 @@ __interrupt void ADCD_ISR(void)
     }
     EPwm1Regs.CMPA.bit.CMPA = LowRes;
     //EPwm1Regs.CMPC = LowRes/2;
-    EPwm1Regs.CMPC = LowRes/2+sampling_offset; //new line
+    //EPwm1Regs.CMPC = LowRes/2+sampling_offset; //new line
 
     // Change when ADC converts to note that there are incorrect times to sample ADC
     //EPwm1Regs.CMPC = LowRes/16;
@@ -108,7 +104,7 @@ __interrupt void ADCD_ISR(void)
     // Here write duty/control effort value to DACA
     dacout = duty;
     setDACA(dacout);
-	setDACB(VoltageFeedback);
+   setDACB(VoltageFeedback);
 
     ADCD_count++;
 
@@ -175,7 +171,43 @@ void main(void)
     GPIO_SetupPinMux(1, GPIO_MUX_CPU1, 1);
     GPIO_SetupPinOptions(1, GPIO_OUTPUT, GPIO_PUSHPULL);
 
+    //edited
     EPwm1Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
+    EPwm1Regs.TBCTL.bit.HSPCLKDIV=1.6666; //set the high speed clock divider to 1.6666 FIX THIS
+    EPwm1Regs.TBCTL.bit.CLKDIV=0x0; //set the clock divider to 1
+    EPwm1Regs.TBPRD = 500;
+    EPwm1Regs.TBCTL.bit.CTRMODE = 0x10;// put into up down count mode!
+
+
+    EPwm1Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
+    EPwm1Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
+    EPwm1Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
+    EPwm1Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (“pulse” is the same as “trigger”)
+    EPwm1Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
+    EPwm1Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
+    EPwm1Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial
+    EPwm1Regs.CMPA.bit.CMPA = Period/2;        // set duty 50% initially
+    EPwm1Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
+    EPwm1Regs.TBPHS.all = 0;
+    EPwm1Regs.TBCTR = 0;
+    EPwm1Regs.TBCTL.bit.PHSEN = TB_DISABLE;
+    EPwm1Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_DISABLE;  //Disabled because TBCTL2.SYNCOSELX = 0
+
+    EPwm1Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
+    EPwm1Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO;
+    EPwm1Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
+    EPwm1Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
+    EPwm1Regs.CMPCTL2.bit.LOADCMODE = CC_CTR_ZERO;
+    EPwm1Regs.CMPCTL2.bit.SHDWCMODE = CC_SHADOW;
+    EPwm1Regs.AQCTLA.bit.ZRO = AQ_SET;
+    EPwm1Regs.AQCTLA.bit.CAU = AQ_CLEAR;
+    EPwm1Regs.AQCTLB.bit.ZRO = AQ_SET;
+    EPwm1Regs.AQCTLB.bit.CBU = AQ_CLEAR;
+    EPwm1Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
+
+   //original if you want to revert
+    /*
+        EPwm1Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
     EPwm1Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
     EPwm1Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
     EPwm1Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
@@ -203,6 +235,7 @@ void main(void)
     EPwm1Regs.AQCTLB.bit.CBU = AQ_CLEAR;
     EPwm1Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
     EPwm1Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
+     */
 
     post_init();
 
@@ -215,6 +248,20 @@ void main(void)
         }
     }
 }
+__interrupt void cpu_timer1_isr(void)
+{
+
+
+
+    if (counter >= 4294967293) {
+    GpioDataRegs.GPATOGGLE.bit.GPIO26 = 1;  // Toggle Blue LED on off
+    counter=0;
+    }
+
+
+    counter++;
+}
+
 
 
 // cpu_timer2_isr CPU Timer2 ISR  Timer making serial_printf called in main() while every 5*40ms 200ms

@@ -48,10 +48,14 @@ float PIduty=0;
 float Integral_current=0;
 
 //
-float VoltageFeedback = 0;
+float CurrentAFeedback = 0;
+float CurrentBFeedback = 0;
+float CurrentCFeedback = 0;
 float dacout = 0;
 int16_t adcd0result = 0;
 int16_t adcd1result = 0;
+int16_t adcd2result = 0;
+
 float dutyStartOpenLoopStep = 0.4;
 float StepSizeOpenLoop = 0.3;
 
@@ -84,22 +88,27 @@ __interrupt void ADCD_ISR(void)
 
     adcd0result = AdcdResultRegs.ADCRESULT0;
     adcd1result = AdcdResultRegs.ADCRESULT1;
+    adcd2result = AdcdResultRegs.ADCRESULT2;
 
     // Here covert ADCIND0 to volts
-    VoltageFeedback = adcd0result*3.0/4096.0;
-
-    if (ADCD_count%40000 == 0) {
-        if (duty1 > dutyStartOpenLoopStep+(StepSizeOpenLoop/2.0)) {  // open loop step for system identification comment this out when implementing your controller
-            duty1 = dutyStartOpenLoopStep;
-        } else {
-            duty1 = dutyStartOpenLoopStep+StepSizeOpenLoop;
-        }
-//        if (stepVolt > stepStart+(StepSize/2.0)) {  // This is help to create your reference step to your controller
-//            stepVolt = stepStart;
-//        } else {
-//            stepVolt = stepStart+StepSize;
-//        }
+    CurrentAFeedback = adcd0result*3.0/4096.0;
+    CurrentBFeedback = adcd1result*1;
+    CurrentBFeedback = adcd2result*1;
+    if (flag==0){
+        if (ADCD_count%40000 == 0) {
+                if (duty1 > dutyStartOpenLoopStep+(StepSizeOpenLoop/2.0)) {  // open loop step for system identification comment this out when implementing your controller
+                    duty1 = dutyStartOpenLoopStep;
+                } else {
+                    duty1 = dutyStartOpenLoopStep+StepSizeOpenLoop;
+                }
+        //        if (stepVolt > stepStart+(StepSize/2.0)) {  // This is help to create your reference step to your controller
+        //            stepVolt = stepStart;
+        //        } else {
+        //            stepVolt = stepStart+StepSize;
+        //        }
+            }
     }
+
 
 // you will calculate your controller here and then the final duty percentage need duty offset added to the controller's calculated duty cycle.
 
@@ -110,6 +119,10 @@ __interrupt void ADCD_ISR(void)
     	error_old=error_current;
     	Integral_old = Integral_current;
     	duty1 = PIduty+dutyoffset;
+    }
+
+    if(flag==2){
+
     }
 
 
@@ -208,9 +221,9 @@ void main(void)
     AdcdRegs.ADCSOC1CTL.bit.CHSEL = 1;  //set SOC1 to convert pin D1
     AdcdRegs.ADCSOC1CTL.bit.ACQPS = 49; //sample window is acqps + 1 SYSCLK cycles = 250ns
     AdcdRegs.ADCSOC1CTL.bit.TRIGSEL = 0x5; // EPWM1 ADCSOCA will trigger SOC1
-    //AdcdRegs.ADCSOC2CTL.bit.CHSEL = ???;  //set SOC2 to convert pin D2
-    //AdcdRegs.ADCSOC2CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
-    //AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = ???; // EPWM4 ADCSOCA will trigger SOC2
+    AdcdRegs.ADCSOC2CTL.bit.CHSEL = 2;  //set SOC2 to convert pin D2 IDK AHHH
+    AdcdRegs.ADCSOC2CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
+    AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = 0x5; // EPWM4 ADCSOCA will trigger SOC2 IDK AHH
     //AdcdRegs.ADCSOC3CTL.bit.CHSEL = ???;  //set SOC3 to convert pin D3
     //AdcdRegs.ADCSOC3CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
     //AdcdRegs.ADCSOC3CTL.bit.TRIGSEL = ???; // EPWM4 ADCSOCA will trigger SOC3
@@ -255,77 +268,7 @@ void main(void)
     EPwm1Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
     EPwm1Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
-    // EPWM2A
-        GPIO_SetupPinMux(2, GPIO_MUX_CPU1, 1);
-        GPIO_SetupPinOptions(2, GPIO_OUTPUT, GPIO_PUSHPULL);
-        //EPWM2B
-        GPIO_SetupPinMux(3, GPIO_MUX_CPU1, 1);
-        GPIO_SetupPinOptions(3, GPIO_OUTPUT, GPIO_PUSHPULL);
 
-        EPwm2Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
-        EPwm2Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
-        EPwm2Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
-        EPwm2Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
-        EPwm2Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (“pulse” is the same as “trigger”)
-        EPwm2Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
-        EPwm2Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
-        EPwm2Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial
-        EPwm2Regs.CMPA.bit.CMPA = Period/2;        // set duty 50% initially
-        EPwm2Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
-        EPwm2Regs.TBPHS.all = 0;
-        EPwm2Regs.TBCTR = 0;
-        EPwm2Regs.TBCTL.bit.PHSEN = TB_DISABLE;
-        EPwm2Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_DISABLE;  //Disabled because TBCTL2.SYNCOSELX = 0
-        EPwm2Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
-        EPwm2Regs.TBCTL.bit.CLKDIV = TB_DIV1;
-        EPwm2Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
-        EPwm2Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO;
-        EPwm2Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
-        EPwm2Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
-        EPwm2Regs.CMPCTL2.bit.LOADCMODE = CC_CTR_ZERO;
-        EPwm2Regs.CMPCTL2.bit.SHDWCMODE = CC_SHADOW;
-        EPwm2Regs.AQCTLA.bit.ZRO = AQ_SET;
-        EPwm2Regs.AQCTLA.bit.CAU = AQ_CLEAR;
-        EPwm2Regs.AQCTLB.bit.ZRO = AQ_SET;
-        EPwm2Regs.AQCTLB.bit.CBU = AQ_CLEAR;
-        EPwm2Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
-        EPwm2Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
-
-        // EPWM3A
-        GPIO_SetupPinMux(4, GPIO_MUX_CPU1, 1);
-        GPIO_SetupPinOptions(4, GPIO_OUTPUT, GPIO_PUSHPULL);
-        //EPWM3B
-        GPIO_SetupPinMux(5, GPIO_MUX_CPU1, 1);
-        GPIO_SetupPinOptions(5, GPIO_OUTPUT, GPIO_PUSHPULL);
-
-        EPwm3Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
-        EPwm3Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
-        EPwm3Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
-        EPwm3Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
-        EPwm3Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (“pulse” is the same as “trigger”)
-        EPwm3Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
-        EPwm3Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
-        EPwm3Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial
-        EPwm3Regs.CMPA.bit.CMPA = Period/2;        // set duty 50% initially
-        EPwm3Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
-        EPwm3Regs.TBPHS.all = 0;
-        EPwm3Regs.TBCTR = 0;
-        EPwm3Regs.TBCTL.bit.PHSEN = TB_DISABLE;
-        EPwm3Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_DISABLE;  //Disabled because TBCTL2.SYNCOSELX = 0
-        EPwm3Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
-        EPwm3Regs.TBCTL.bit.CLKDIV = TB_DIV1;
-        EPwm3Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
-        EPwm3Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO;
-        EPwm3Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
-        EPwm3Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
-        EPwm3Regs.CMPCTL2.bit.LOADCMODE = CC_CTR_ZERO;
-        EPwm3Regs.CMPCTL2.bit.SHDWCMODE = CC_SHADOW;
-        EPwm3Regs.AQCTLA.bit.ZRO = AQ_SET;
-        EPwm3Regs.AQCTLA.bit.CAU = AQ_CLEAR;
-        EPwm3Regs.AQCTLB.bit.ZRO = AQ_SET;
-        EPwm3Regs.AQCTLB.bit.CBU = AQ_CLEAR;
-        EPwm3Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
-        EPwm3Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
     post_init();
 
     // IDLE loop. Just sit and loop forever (optional):

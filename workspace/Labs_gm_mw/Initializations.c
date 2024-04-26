@@ -61,6 +61,8 @@ void pre_init(void)
 
     InitGpio();
 
+
+
 	// Blue LED on LaunchPad
     GPIO_SetupPinMux(31, GPIO_MUX_CPU1, 0);
     GPIO_SetupPinOptions(31, GPIO_OUTPUT, GPIO_PUSHPULL);
@@ -262,7 +264,7 @@ void pre_init(void)
     // Configure CPU-Timer 0, 1, and 2 to interrupt every given period:
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000);
-    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 20000);
+    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 10000); //cputimer 1 is 6MHZ
     ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 40000);
 
     // Enable CpuTimer Interrupt bit TIE
@@ -331,6 +333,7 @@ __interrupt void SWI_isr(void) {
 }
 
 // cpu_timer0_isr - CPU Timer0 ISR  Currently Not doing anything
+
 __interrupt void cpu_timer0_isr(void)
 {
     CpuTimer0.InterruptCount++;
@@ -340,9 +343,5 @@ __interrupt void cpu_timer0_isr(void)
 }
 
 // cpu_timer1_isr - CPU Timer1 ISR Currently Not doing anything
-__interrupt void cpu_timer1_isr(void)
-{
-    CpuTimer1.InterruptCount++;
 
-}
 

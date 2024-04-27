@@ -321,7 +321,7 @@ void main(void)
     AdcdRegs.ADCSOC1CTL.bit.TRIGSEL = 0x5; // EPWM1 ADCSOCA will trigger SOC1
     AdcdRegs.ADCSOC2CTL.bit.CHSEL = 2;  //set SOC2 to convert pin D2 IDK AHHH
     AdcdRegs.ADCSOC2CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
-    AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = 0x5; // EPWM4 ADCSOCA will trigger SOC2 IDK AHH
+    AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = 0x5; // EPWM3 ADCSOCA will trigger SOC2 IDK AHH
     //AdcdRegs.ADCSOC3CTL.bit.CHSEL = ???;  //set SOC3 to convert pin D3
     //AdcdRegs.ADCSOC3CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
     //AdcdRegs.ADCSOC3CTL.bit.TRIGSEL = ???; // EPWM4 ADCSOCA will trigger SOC3
@@ -367,11 +367,11 @@ void main(void)
     EPwm1Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
 // EPWM2A
-    GPIO_SetupPinMux(0, GPIO_MUX_CPU1, 1); //change this
-    GPIO_SetupPinOptions(0, GPIO_OUTPUT, GPIO_PUSHPULL);//change this
+    GPIO_SetupPinMux(2, GPIO_MUX_CPU1, 1); //change this
+    GPIO_SetupPinOptions(2, GPIO_OUTPUT, GPIO_PUSHPULL);//change this
     //EPWM2B
-    GPIO_SetupPinMux(1, GPIO_MUX_CPU1, 1);//change this
-    GPIO_SetupPinOptions(1, GPIO_OUTPUT, GPIO_PUSHPULL);
+    GPIO_SetupPinMux(3, GPIO_MUX_CPU1, 1);//change this
+    GPIO_SetupPinOptions(3, GPIO_OUTPUT, GPIO_PUSHPULL);
 
     EPwm2Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
     EPwm2Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
@@ -403,11 +403,11 @@ void main(void)
     EPwm2Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
 // EPWM3A
-    GPIO_SetupPinMux(0, GPIO_MUX_CPU1, 1);
-    GPIO_SetupPinOptions(0, GPIO_OUTPUT, GPIO_PUSHPULL);
+    GPIO_SetupPinMux(4, GPIO_MUX_CPU1, 1);
+    GPIO_SetupPinOptions(4, GPIO_OUTPUT, GPIO_PUSHPULL);
     //EPWM3B
-    GPIO_SetupPinMux(1, GPIO_MUX_CPU1, 1);
-    GPIO_SetupPinOptions(1, GPIO_OUTPUT, GPIO_PUSHPULL);
+    GPIO_SetupPinMux(5, GPIO_MUX_CPU1, 1);
+    GPIO_SetupPinOptions(5, GPIO_OUTPUT, GPIO_PUSHPULL);
 
     EPwm3Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
     EPwm3Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group

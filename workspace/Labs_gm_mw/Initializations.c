@@ -113,7 +113,8 @@ void pre_init(void)
     GPIO_SetupPinOptions(25, GPIO_OUTPUT, GPIO_PUSHPULL);
     GpioDataRegs.GPACLEAR.bit.GPIO25 = 1;
 
-	// LED9
+	// LED9 
+    //GPIO VA
     GPIO_SetupPinMux(26, GPIO_MUX_CPU1, 0);
     GPIO_SetupPinOptions(26, GPIO_OUTPUT, GPIO_PUSHPULL);
     GpioDataRegs.GPACLEAR.bit.GPIO26 = 1;

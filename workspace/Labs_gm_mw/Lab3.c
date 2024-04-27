@@ -183,7 +183,7 @@ void main(void)
     EPwm1Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
     EPwm1Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
     EPwm1Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
-    EPwm1Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (“pulse” is the same as “trigger”)
+    EPwm1Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (ï¿½pulseï¿½ is the same as ï¿½triggerï¿½)
     EPwm1Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
     EPwm1Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
     EPwm1Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial
@@ -212,7 +212,7 @@ void main(void)
     EPwm1Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
     EPwm1Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
     EPwm1Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
-    EPwm1Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (“pulse” is the same as “trigger”)
+    EPwm1Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (ï¿½pulseï¿½ is the same as ï¿½triggerï¿½)
     EPwm1Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
     EPwm1Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
     EPwm1Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial

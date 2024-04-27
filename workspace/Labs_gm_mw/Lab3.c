@@ -30,6 +30,7 @@ void setDACA(float dacouta0);
 void setDACB(float dacouta1);
 __interrupt void ADCD_ISR(void);
 
+int32_t counterMax=4294967295;
 uint32_t sampling_offset = 0;
 int32_t ADCD_count = 0;
 int32_t counter=0;
@@ -250,14 +251,19 @@ void main(void)
 }
 __interrupt void cpu_timer1_isr(void)
 {
-
-
-
-    if (counter >= 4294967293) {
-    GpioDataRegs.GPATOGGLE.bit.GPIO26 = 1;  // Toggle Blue LED on off
+    /*
+    if (counter >= 4294967294) {
+    GpioDataRegs.GPATOGGLE.bit.GPIO26 = 1;  //toggle gpio26
     counter=0;
     }
+    */
+    duty=0.45*sin(counter*2*pi/(counterMax+1))+0.5;
 
+
+    if(counter >= counterMax){
+        GpioDataRegs.GPATOGGLE.bit.GPIO26 = 1;  //toggle gpio26
+        counter = 0;
+     }
 
     counter++;
 }

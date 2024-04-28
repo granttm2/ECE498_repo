@@ -47,7 +47,7 @@ float f = 16666.6666667; //based on Period (freq/10^8)^-1
 float Ki = 1456;
 float reference = 0.4;
 float Kp = 0;
-float flag=0; // start in OL
+int flag=1; // start in OL
 float error_current=0;
 float error_old=0;
 float PIduty=0;
@@ -60,6 +60,7 @@ float dacout3 = 0;
 int16_t adcd0result = 0;
 int16_t adcd1result = 0;
 int16_t adcd2result = 0;
+
 float dutyStartOpenLoopStep = 0.4;
 float StepSizeOpenLoop = 0.3;
 float theta_old=0.0;
@@ -92,46 +93,70 @@ float Ts = 1.0/60000.0; //Switching frequency SET THIS UP
 float Vdc = 10.0; //input voltage
 
 float t=0; //time
+float iAFeedback = 0.0;
+float iBFeedback = 0.0;
+float iCFeedback = 0.0;
 float currentFeedback[3]={0.0,0.0,0.0};
 float ialphaBetaGamma[3]={0.0,0.0,0.0};
 float idq0[3]={0.0,0.0,0.0};
 float Valphabeta[3]={0.0,0.0,0.0};
 float Vabcref[3]={0.0,0.0,0.0};
 float VDQref[3]={0.0,0.0,0.0};
+//float w = 2*PI*60;
 int i =0;
+float IDerror_current = 0.0;//
+float IDintegral_current = 0.0;//
+float IDPIDout = 0.0;//
+float VDref = 0.0;//
+float IDerror_old = 0.0;//
+float KpID= 0.0; //set this
+float KiID= 0.0; //set this
+float IDintegral_old = 0.0;
+float KpIQ = 0.0;//
+float KiIQ = 0.0;//
+float L= 0.002;//
+float IQerror_current = 0.0;//
+float IQintegral_current = 0.0;//
+float IQintegral_old = 0.0;//
+float IQPIDout = 0.0;//'
+float VQref = 0.0;
+float IQerror_old = 0.0;
+float iqRef = 0.0;
+float idRef = 0.5; //change this
 
 
-float theta, sinTheta, cosTheta;
-static float clarke[3][3] =  {{0.66666666666,-0.33333333333,0.33333333333},{0.0,0.57735026919,-0.57735026919},{0.33333333333,0.33333333333,0.33333333333}};
-static float invclarke[3][3] = {{1.5,0,1.5},{-0.75, 1.29903810567, 1.5},{-0.75, 1.29903810567, 1.5}}; //amplitude invariant inverse clarke transformation
-void clarke(float *abc, float *alphabetagamma){//takes in pointer to original and transformed array and applies clarke transform
-    for (i=0; i<3; i++){
-        alphabetagamma[i]=clarke[i][0]*abc[0]+clarke[i][1]*abc[1]+clarke[i][2]*abc[2];
-    }
-    i=0;
+float theta = 0.0;
+float sinTheta, cosTheta, theta_old;
+
+float clarke[3][3] =  {{0.66666666666,-0.33333333333,0.33333333333},{0.0,0.57735026919,-0.57735026919},{0.33333333333,0.33333333333,0.33333333333}};
+float invclarke[3][3] = {{1.5,0,1.5},{-0.75, 1.29903810567, 1.5},{-0.75, 1.29903810567, 1.5}}; //amplitude invariant inverse clarke transformation
+
+void clarke_transform(float* abc, float* alphabetagamma){//takes in pointer to original and transformed array and applies clarke transform
+    alphabetagamma[0]=(clarke[0][0])*(abc[0])+(clarke[0][1])*(abc[1])+(clarke[0][2])*(abc[2]);
+    alphabetagamma[1]=(clarke[1][0])*(abc[0])+(clarke[1][1])*(abc[1])+(clarke[1][2])*(abc[2]);
+    alphabetagamma[2]=(clarke[2][0])*(abc[0])+(clarke[2][1])*(abc[1])+(clarke[2][2])*(abc[2]);
     return;
 }
-void invclarke(float *alphabetagamma, float *abc){ //takes in pointer to original and transformed array and applies inverse clarke transform
-    for (i=0; i<3; i++){
-        abc[i]=invclarke[i][0]*alphabetagamma[0]+invclarke[i][1]*alphabetagamma[1]+invclarke[i][2]*alphabetagamma[2];
-    }
-    i=0;
+void invclarke_transform(float* alphabetagamma, float* abc){ //takes in pointer to original and transformed array and applies inverse clarke transform
+    abc[0]=invclarke[0][0]*alphabetagamma[0]+invclarke[0][1]*alphabetagamma[1]+invclarke[0][2]*alphabetagamma[2];
+    abc[1]=invclarke[1][0]*alphabetagamma[0]+invclarke[1][1]*alphabetagamma[1]+invclarke[1][2]*alphabetagamma[2];
+    abc[2]=invclarke[2][0]*alphabetagamma[0]+invclarke[2][1]*alphabetagamma[1]+invclarke[2][2]*alphabetagamma[2];
     return;
 }
-void park(float* alphabetagamma, float *dq0, float theta){ //takes in pointer to originalm, transformed array, and theta then applies park transform
-    sinTheta = sin(theta);
-    cosTheta = cos(theta);
-    float park[ROWS][COLS] = {{cosTheta, sinTheta, 0},{-sinTheta, cosTheta, 0},{0,0,1}};
+void park_transform(float* alphabetagamma, float *dq0, float theta){ //takes in pointer to originalm, transformed array, and theta then applies park transform
+    sinTheta = (float) sin(theta);
+    cosTheta = (float) cos(theta);
+    float park[3][3] = {{cosTheta, sinTheta, 0},{-sinTheta, cosTheta, 0},{0,0,1}};
     for (i=0; i<3; i++){
         dq0[i]=park[i][0]*alphabetagamma[0]+park[i][1]*alphabetagamma[1]+park[i][2]*alphabetagamma[2];
     }
     i=0;
     return;
 }
-void invpark(float* dq0, float* alphabetagamma, float theta){ //takes in pointer to originalm, transformed array, and theta then applies inverse park transform
-    sinTheta = sin(theta);
-    cosTheta = cos(theta);
-    float invpark[ROWS][COLS] = {{cosTheta, -sinTheta, 0},{sinTheta, cosTheta, 0},{0,0,1}};
+void invpark_transform(float* dq0, float* alphabetagamma, float theta){ //takes in pointer to originalm, transformed array, and theta then applies inverse park transform
+    sinTheta = (float) sin(theta);
+    cosTheta = (float) cos(theta);
+    float invpark[3][3] = {{cosTheta, -sinTheta, 0},{sinTheta, cosTheta, 0},{0,0,1}};
     for (i=0; i<3; i++){
         alphabetagamma[i]=invpark[i][0]*dq0[0]+invpark[i][1]*dq0[1]+invpark[i][2]*dq0[2];
     }
@@ -163,57 +188,44 @@ __interrupt void ADCD_ISR(void)
     iAFeedback = adcd0result*0.00312207-10.8537; //board 1 calibration
     iBFeedback = adcd1result*0.00322005-10.733; //board 2 calibration
     iCFeedback = adcd2result*0.00314864-10.991;//board 3 calibration
-    currentFeedback[3]={iAFeedback,iBFeedback,iCFeedback};
-
-    theta = theta_old + w * (1/f);
+    currentFeedback[0]=iAFeedback;
+    currentFeedback[1]=iBFeedback;
+    currentFeedback[2]=iCFeedback;
+    theta = theta_old + 0.00628318279;
     if(theta >= 2*PI){
         theta = 0.0; //reset theta
     }
-    
-    if (flag==0){ //open loop
-        duty1=0.4*sin(theta)+0.5;
-        duty2=0.4*sin(theta+2.09439510239)+0.5;
-        duty3=0.4*sin(theta+4.18879020479)+0.5;
+    theta_old = theta; //update theta_old AFTER all calculations
+    if (flag==1){ //open loop
+        duty1= 0.4*sin(theta)+0.5;
+        duty2= 0.4*sin(theta+2.09439510239)+0.5;
+        duty3= 0.4*sin(theta+4.18879020479)+0.5;
     }
-    if (flag == 1){
+    if (flag == 2){
         //theta update BEFORE transforms
-        float IDerror_current = 0.0;//
-        float IDintegral_current = 0.0;//
-        float IDPIDout = 0.0;//
-        float VDref = 0.0;//
-        float IDerror_old = 0.0;//
-        float KpID= 0.0; //set this
-        float KiID= 0.0; //set this
 
-        float KpIQ = 0.0;//
-        float KiIQ = 0.0;//
-        float w=376.991118431;//
-        float L= 0.002;//
-        float IQerror_current = 0.0;//
-        float IQintegral_current = 0.0;//
-        float IQintegral_old = 0.0;//
-        float IQPIDout = 0.0;//
 
-        clarke(currentFeedback, ialphaBetaGamma);
-        park(ialphaBetaGamma, idq0, theta);
+        clarke_transform(currentFeedback, ialphaBetaGamma);
+        park_transform(ialphaBetaGamma, idq0, theta);
         
         IDerror_current = idRef-idq0[0]; //ID current error
-        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2)*(1/60000);
+        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2)*(0.00001666666);
         IDPIDout=KpID*IDerror_current+IDintegral_current*KiID;
-        VDref=IDPIDout+w*L*idq0[1];//feed forward compensation
+        VDref=IDPIDout+376.991118431*L*idq0[1];//feed forward compensation
         IDerror_old=IDerror_current;
 
         IQerror_current = iqRef-idq0[1];
         IQintegral_current = iqRef-idq0[1];
-        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2)*(1/60000);
+        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2)*(0.00001666666);
         IQPIDout=KpIQ*IQerror_current+IQintegral_current*KiIQ;
-        VQref=IQPIDout+w*L*idq0[0];//feed forward compensation
+        VQref=IQPIDout+376.991118431*L*idq0[0];//feed forward compensation
         IQerror_old=IQerror_current;
+
         VDQref[0]=VDref;
         VDQref[1]=VQref;//update VDQref array
         VDQref[2]=0.0;//dont care about 0 component
-        invpark(VDQref,Valphabeta,theta);
-        invclarke(Valphabeta,Vabcref);
+        invpark_transform(VDQref,Valphabeta,theta);
+        invclarke_transform(Valphabeta,Vabcref);
         duty1=Vabcref[0]*(1/Vdc) + 0.5;//adjust scaling
         duty2=Vabcref[1]*(1/Vdc) + 0.5;
         duty3=Vabcref[2]*(1/Vdc) + 0.5;
@@ -230,7 +242,6 @@ __interrupt void ADCD_ISR(void)
     if (duty2 > 0.9) duty2 = 0.9;
     if (duty3 < 0.1) duty3 = 0.1;
     if (duty3 > 0.9) duty3 = 0.9;
-
     LowRes1 = (uint32_t)(duty1*Period);
     LowRes2 = (uint32_t)(duty2*Period);
     LowRes3 = (uint32_t)(duty3*Period);
@@ -259,9 +270,9 @@ __interrupt void ADCD_ISR(void)
     EPwm2Regs.CMPA.bit.CMPA = LowRes2;
     //EPwm1Regs.CMPC = LowRes/2;
     EPwm2Regs.CMPC = LowRes1/2+sampling_offset; //new line
-    EPwm3Regs.CMPA.bit.CMPA = LowRes3;
+    EPwm4Regs.CMPA.bit.CMPA = LowRes3;
     //EPwm1Regs.CMPC = LowRes/2;
-    EPwm3Regs.CMPC = LowRes1/2+sampling_offset; //new line
+    EPwm4Regs.CMPC = LowRes1/2+sampling_offset; //new line
 
     // Change when ADC converts to note that there are incorrect times to sample ADC
     //EPwm1Regs.CMPC = LowRes/16;
@@ -278,7 +289,7 @@ __interrupt void ADCD_ISR(void)
 
     AdcdRegs.ADCINTFLGCLR.bit.ADCINT1 = 1;  //clear interrupt flag
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
-    theta_old = theta; //update theta_old AFTER all calculations
+
 }
 
 
@@ -321,7 +332,7 @@ void main(void)
     AdcdRegs.ADCSOC1CTL.bit.TRIGSEL = 0x5; // EPWM1 ADCSOCA will trigger SOC1
     AdcdRegs.ADCSOC2CTL.bit.CHSEL = 2;  //set SOC2 to convert pin D2 IDK AHHH
     AdcdRegs.ADCSOC2CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
-    AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = 0x5; // EPWM3 ADCSOCA will trigger SOC2 IDK AHH
+    AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = 0x5; // EPwm4 ADCSOCA will trigger SOC2 IDK AHH
     //AdcdRegs.ADCSOC3CTL.bit.CHSEL = ???;  //set SOC3 to convert pin D3
     //AdcdRegs.ADCSOC3CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
     //AdcdRegs.ADCSOC3CTL.bit.TRIGSEL = ???; // EPWM4 ADCSOCA will trigger SOC3
@@ -349,8 +360,8 @@ void main(void)
     EPwm1Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
     EPwm1Regs.TBPHS.all = 0;
     EPwm1Regs.TBCTR = 0;
-    EPwm1Regs.TBCTL.bit.PHSEN = TB_DISABLE;
-    EPwm1Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_DISABLE;  //Disabled because TBCTL2.SYNCOSELX = 0
+    EPwm1Regs.TBCTL.bit.PHSEN = 0x0; //enable
+    EPwm1Regs.TBCTL.bit.SYNCOSEL = 0x1;  //Disabled because TBCTL2.SYNCOSELX = 0 CHANGE
     EPwm1Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
     EPwm1Regs.TBCTL.bit.CLKDIV = TB_DIV1;
     EPwm1Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
@@ -385,8 +396,9 @@ void main(void)
     EPwm2Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
     EPwm2Regs.TBPHS.all = 0;
     EPwm2Regs.TBCTR = 0;
-    EPwm2Regs.TBCTL.bit.PHSEN = TB_DISABLE;
-    EPwm2Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_DISABLE;  //Disabled because TBCTL2.SYNCOSELX = 0
+    EPwm2Regs.TBCTL.bit.PHSEN = 0x1; //SET TO 1 TO SYNCHRONIZE WITH ZERO PHASE
+    EPwm2Regs.TBCTL.bit.SYNCOSEL = 0x3;  //SET TO THREE TO ENABLE SLAVE MODE
+
     EPwm2Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
     EPwm2Regs.TBCTL.bit.CLKDIV = TB_DIV1;
     EPwm2Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
@@ -402,41 +414,42 @@ void main(void)
     EPwm2Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
     EPwm2Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
-// EPWM3A
-    GPIO_SetupPinMux(4, GPIO_MUX_CPU1, 1);
-    GPIO_SetupPinOptions(4, GPIO_OUTPUT, GPIO_PUSHPULL);
-    //EPWM3B
-    GPIO_SetupPinMux(5, GPIO_MUX_CPU1, 1);
-    GPIO_SetupPinOptions(5, GPIO_OUTPUT, GPIO_PUSHPULL);
+// EPwm4A
+    GPIO_SetupPinMux(6, GPIO_MUX_CPU1, 1);
+    GPIO_SetupPinOptions(6, GPIO_OUTPUT, GPIO_PUSHPULL);
+    //EPwm4B
+    GPIO_SetupPinMux(7, GPIO_MUX_CPU1, 1);
+    GPIO_SetupPinOptions(7, GPIO_OUTPUT, GPIO_PUSHPULL);
 
-    EPwm3Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
-    EPwm3Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
-    EPwm3Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
-    EPwm3Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
-    EPwm3Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (�pulse� is the same as �trigger�)
-    EPwm3Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
-    EPwm3Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
-    EPwm3Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial
-    EPwm3Regs.CMPA.bit.CMPA = Period/2;        // set duty 50% initially
-    EPwm3Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
-    EPwm3Regs.TBPHS.all = 0;
-    EPwm3Regs.TBCTR = 0;
-    EPwm3Regs.TBCTL.bit.PHSEN = TB_DISABLE;
-    EPwm3Regs.TBCTL.bit.SYNCOSEL = TB_SYNC_DISABLE;  //Disabled because TBCTL2.SYNCOSELX = 0
-    EPwm3Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
-    EPwm3Regs.TBCTL.bit.CLKDIV = TB_DIV1;
-    EPwm3Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
-    EPwm3Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO;
-    EPwm3Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
-    EPwm3Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
-    EPwm3Regs.CMPCTL2.bit.LOADCMODE = CC_CTR_ZERO;
-    EPwm3Regs.CMPCTL2.bit.SHDWCMODE = CC_SHADOW;
-    EPwm3Regs.AQCTLA.bit.ZRO = AQ_SET;
-    EPwm3Regs.AQCTLA.bit.CAU = AQ_CLEAR;
-    EPwm3Regs.AQCTLB.bit.ZRO = AQ_SET;
-    EPwm3Regs.AQCTLB.bit.CBU = AQ_CLEAR;
-    EPwm3Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
-    EPwm3Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
+    EPwm4Regs.TBCTL.bit.CTRMODE = TB_FREEZE; // freeze counter
+    EPwm4Regs.ETSEL.bit.SOCAEN = 0; // Disable SOC on A group
+    EPwm4Regs.ETSEL.bit.SOCASEL = 4; // Select Event when counter equal to CMPC
+    EPwm4Regs.ETSEL.bit.SOCASELCMP = 1;  // Use CMPC
+    EPwm4Regs.ETPS.bit.SOCAPRD = 3; // Generate pulse on 3rd event (�pulse� is the same as �trigger�)
+    EPwm4Regs.TBCTL.bit.PRDLD = TB_IMMEDIATE;    // set Immediate load
+    EPwm4Regs.TBPRD = Period - 1;                // PWM frequency = 1 / period
+    EPwm4Regs.CMPB.bit.CMPB = Period/2;          // set duty 50% initial
+    EPwm4Regs.CMPA.bit.CMPA = Period/2;        // set duty 50% initially
+    EPwm4Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
+    EPwm4Regs.TBPHS.all = 0;
+    EPwm4Regs.TBCTR = 0;
+    //EPwm4Regs.TBCTL.bit.SWFSYNC = 0x1;  //SET TO THREE TO ENABLE SLAVE MODE
+    EPwm4Regs.TBCTL.bit.PHSEN = 0x1;
+    EPwm4Regs.TBCTL.bit.SYNCOSEL = 0x3;  //Disabled because TBCTL2.SYNCOSELX = 0
+    EPwm4Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
+    EPwm4Regs.TBCTL.bit.CLKDIV = TB_DIV1;
+    EPwm4Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
+    EPwm4Regs.CMPCTL.bit.LOADBMODE = CC_CTR_ZERO;
+    EPwm4Regs.CMPCTL.bit.SHDWAMODE = CC_SHADOW;
+    EPwm4Regs.CMPCTL.bit.SHDWBMODE = CC_SHADOW;
+    EPwm4Regs.CMPCTL2.bit.LOADCMODE = CC_CTR_ZERO;
+    EPwm4Regs.CMPCTL2.bit.SHDWCMODE = CC_SHADOW;
+    EPwm4Regs.AQCTLA.bit.ZRO = AQ_SET;
+    EPwm4Regs.AQCTLA.bit.CAU = AQ_CLEAR;
+    EPwm4Regs.AQCTLB.bit.ZRO = AQ_SET;
+    EPwm4Regs.AQCTLB.bit.CBU = AQ_CLEAR;
+    EPwm4Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
+    EPwm4Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
     post_init();
 

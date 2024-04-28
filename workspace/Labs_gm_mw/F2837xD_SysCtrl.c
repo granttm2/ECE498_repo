@@ -200,6 +200,7 @@ void InitPeripheralClocks(void)
     CpuSysRegs.PCLKCR0.bit.CPUTIMER1 = 1;
     CpuSysRegs.PCLKCR0.bit.CPUTIMER2 = 1;
 
+
 #ifdef CPU1
     CpuSysRegs.PCLKCR0.bit.HRPWM = 1;
 #endif

@@ -242,6 +242,7 @@ void pre_init(void)
     // Interrupts that are used in this example are re-mapped to
     // ISR functions found within this project
     EALLOW;  // This is needed to write to EALLOW protected registers
+    //PCLKCR0.TBCLKSYNC.bit. = 1;
     PieVectTable.TIMER0_INT = &cpu_timer0_isr;
     PieVectTable.TIMER1_INT = &cpu_timer1_isr;
     PieVectTable.TIMER2_INT = &cpu_timer2_isr;
@@ -265,7 +266,7 @@ void pre_init(void)
     // Configure CPU-Timer 0, 1, and 2 to interrupt every given period:
     // 200MHz CPU Freq,                       Period (in uSeconds)
     ConfigCpuTimer(&CpuTimer0, LAUNCHPAD_CPU_FREQUENCY, 10000);
-    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 1.66667); //cputimer 1 is 6MHZ
+    ConfigCpuTimer(&CpuTimer1, LAUNCHPAD_CPU_FREQUENCY, 40000); //cputimer 1 is 6MHZ
     ConfigCpuTimer(&CpuTimer2, LAUNCHPAD_CPU_FREQUENCY, 40000);
 
     // Enable CpuTimer Interrupt bit TIE
@@ -341,6 +342,13 @@ __interrupt void cpu_timer0_isr(void)
 
     // Acknowledge this interrupt to receive more interrupts from group 1
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
+}
+
+__interrupt void cpu_timer1_isr(void)
+{
+    CpuTimer1.InterruptCount++;
+
+
 }
 
 // cpu_timer1_isr - CPU Timer1 ISR Currently Not doing anything

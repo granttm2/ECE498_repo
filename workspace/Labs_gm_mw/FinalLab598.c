@@ -85,7 +85,7 @@ uint32_t LowRes3 = 0; //c phase
 //uint32_t Period = 2000;  //50Khz
 
 
-uint32_t Period = 1667;  //69Khz    1/Period * 10^8 = frequency
+uint32_t Period = 1667;  //60Khz    1/Period * 10^8 = frequency
 float dutyoffset = 0.5;
 
 //NEW
@@ -122,7 +122,7 @@ float IQPIDout = 0.0;//'
 float VQref = 0.0;
 float IQerror_old = 0.0;
 float iqRef = 0.0;
-float idRef = 0.5; //change this
+float idRef = 0.4; //change this
 
 
 float theta = 0.0;
@@ -173,7 +173,6 @@ void abcToDq0(float* abc, float* dq0, float* theta){
 }
 */
 
-
 //adcd1 pie interrupt
 __interrupt void ADCD_ISR(void)
 {
@@ -191,15 +190,21 @@ __interrupt void ADCD_ISR(void)
     currentFeedback[0]=iAFeedback;
     currentFeedback[1]=iBFeedback;
     currentFeedback[2]=iCFeedback;
-    theta = theta_old + 0.00628318279;
+//    theta = theta_old + 0.00628318279;
+    theta = theta_old + TWOPI*180./60000.;//weird shit
     if(theta >= 2*PI){
         theta = 0.0; //reset theta
     }
     theta_old = theta; //update theta_old AFTER all calculations
     if (flag==1){ //open loop
         duty1= 0.4*sin(theta)+0.5;
-        duty2= 0.4*sin(theta+2.09439510239)+0.5;
-        duty3= 0.4*sin(theta+4.18879020479)+0.5;
+        duty2= 0.4*sin(theta+(TWOPI)/3.)+0.5;
+        duty3= 0.4*sin(theta+(2*TWOPI)/3)+0.5;
+        //duty1=0.5;
+        //duty2=0.5;
+        //duty3=0.5;
+        setDACA(theta/TWOPI);
+        //setDACB(theta/TWOPI);
     }
     if (flag == 2){
         //theta update BEFORE transforms
@@ -209,16 +214,16 @@ __interrupt void ADCD_ISR(void)
         park_transform(ialphaBetaGamma, idq0, theta);
         
         IDerror_current = idRef-idq0[0]; //ID current error
-        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2)*(0.00001666666);
+        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2.0)*(0.00001666666);
         IDPIDout=KpID*IDerror_current+IDintegral_current*KiID;
-        VDref=IDPIDout+376.991118431*L*idq0[1];//feed forward compensation
+        VDref=IDPIDout+3.0*TWOPI*60*L*idq0[1];//feed forward compensation
         IDerror_old=IDerror_current;
 
         IQerror_current = iqRef-idq0[1];
         IQintegral_current = iqRef-idq0[1];
-        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2)*(0.00001666666);
+        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2.0)*(0.00001666666);
         IQPIDout=KpIQ*IQerror_current+IQintegral_current*KiIQ;
-        VQref=IQPIDout+376.991118431*L*idq0[0];//feed forward compensation
+        VQref=IQPIDout+3.0*TWOPI*60*L*idq0[0];//feed forward compensation
         IQerror_old=IQerror_current;
 
         VDQref[0]=VDref;
@@ -229,6 +234,9 @@ __interrupt void ADCD_ISR(void)
         duty1=Vabcref[0]*(1/Vdc) + 0.5;//adjust scaling
         duty2=Vabcref[1]*(1/Vdc) + 0.5;
         duty3=Vabcref[2]*(1/Vdc) + 0.5;
+        dacout1 = duty1;
+        setDACA(VDQref[0]);
+        setDACB(VDQref[1]);
     }
 
 
@@ -279,9 +287,7 @@ __interrupt void ADCD_ISR(void)
     //EPwm1Regs.CMPC = 0;
 
     // Here write duty/control effort value to DACA
-    dacout1 = duty1;
-    setDACA(dacout1);
-	setDACB(VoltageFeedback);
+
 
     ADCD_count++;
 
@@ -297,6 +303,7 @@ __interrupt void ADCD_ISR(void)
 
 void main(void)
 {
+
     pre_init();
 
     EALLOW;

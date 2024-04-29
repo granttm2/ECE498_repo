@@ -126,10 +126,15 @@ float idRef = 0.4; //change this
 
 
 float theta = 0.0;
-float sinTheta, cosTheta, theta_old;
+float sinTheta=0.0;
+float cosTheta =0.0;
+float idqref[3]={0.4,0,0};
+float alphabeta[3]={0.0,0.0,0.0};
+float abc[3]={0.0,0.0,0.0};
+float clarke[3][3] =  {{0.66666666666,-0.33333333333,-0.33333333333},{0.0,0.57735026919,-0.57735026919},{0.33333333333,0.33333333333,0.33333333333}};
+float park[][3] =  {{0.0,0.0,0.0},{0.0,0.0,0.0},{0.0,0.0,0.0}};
 
-float clarke[3][3] =  {{0.66666666666,-0.33333333333,0.33333333333},{0.0,0.57735026919,-0.57735026919},{0.33333333333,0.33333333333,0.33333333333}};
-float invclarke[3][3] = {{1.5,0,1.5},{-0.75, 1.29903810567, 1.5},{-0.75, 1.29903810567, 1.5}}; //amplitude invariant inverse clarke transformation
+float invclarke[3][3] = {{1,0,1},{-0.5,0.86602540378 , 1},{-0.5,-0.86602540378, 1}}; //amplitude invariant inverse clarke transformation
 
 void clarke_transform(float* abc, float* alphabetagamma){//takes in pointer to original and transformed array and applies clarke transform
     alphabetagamma[0]=(clarke[0][0])*(abc[0])+(clarke[0][1])*(abc[1])+(clarke[0][2])*(abc[2]);
@@ -143,12 +148,18 @@ void invclarke_transform(float* alphabetagamma, float* abc){ //takes in pointer 
     abc[2]=invclarke[2][0]*alphabetagamma[0]+invclarke[2][1]*alphabetagamma[1]+invclarke[2][2]*alphabetagamma[2];
     return;
 }
-void park_transform(float* alphabetagamma, float *dq0, float theta){ //takes in pointer to originalm, transformed array, and theta then applies park transform
-    sinTheta = (float) sin(theta);
-    cosTheta = (float) cos(theta);
-    float park[3][3] = {{cosTheta, sinTheta, 0},{-sinTheta, cosTheta, 0},{0,0,1}};
+void park_transform(float* alphabetagamma, float *dq0, float park[][3]){ //takes in pointer to originalm, transformed array, and theta then applies park transform
     for (i=0; i<3; i++){
         dq0[i]=park[i][0]*alphabetagamma[0]+park[i][1]*alphabetagamma[1]+park[i][2]*alphabetagamma[2];
+    }
+    i=0;
+    return;
+}
+
+void abcDQ0transform(float* abc, float *dq0, float theta){ //takes in pointer to originalm, transformed array, and theta then applies park transform
+    float park[3][3] = {{(2.0/3.0)*cos(theta), (2.0/3.0)*cos(theta-TWOPI/3.0), (2.0/3.0)*cos(theta+TWOPI/3.0)},{-(2.0/3.0)*sin(theta), -(2.0/3.0)*sin(theta-TWOPI/3.0), -(2.0/3.0)*sin(theta+TWOPI/3.0)},{(1.0/3.0),(1.0/3.0),(1.0/3.0)}};
+    for (i=0; i<3; i++){
+        dq0[i]=park[i][0]*abc[0]+park[i][1]*abc[1]+park[i][2]*abc[2];
     }
     i=0;
     return;
@@ -185,50 +196,89 @@ __interrupt void ADCD_ISR(void)
 
     // Convert ADC current measurements to amps
     iAFeedback = adcd0result*0.00312207-10.8537; //board 1 calibration
-    iBFeedback = adcd1result*0.00322005-10.733; //board 2 calibration
+    iBFeedback = adcd1result*0.00485663-16.867; //board 2 calibration
+
     iCFeedback = adcd2result*0.00314864-10.991;//board 3 calibration
     currentFeedback[0]=iAFeedback;
     currentFeedback[1]=iBFeedback;
     currentFeedback[2]=iCFeedback;
 //    theta = theta_old + 0.00628318279;
-    theta = theta_old + TWOPI*180./60000.;//weird shit
+    theta = theta_old + TWOPI*180./60000.;//interrupt called at 20kHz, so need to triple omega!
+/*    sinTheta =(float) sin(theta);
+    cosTheta =(float) cos(theta);
+    park[0][0]= cosTheta;
+    park[0][1]=sinTheta;
+    park[0][2]=0.0;
+    park[1][0]=-sinTheta;
+    park[1][1]=cosTheta;
+    park[1][2]=0.0;
+    park[2][0]=0.0;
+    park[2][1]=0.0;
+    park[2][2]=1.0;
+*/
     if(theta >= 2*PI){
         theta = 0.0; //reset theta
     }
     theta_old = theta; //update theta_old AFTER all calculations
     if (flag==1){ //open loop
         duty1= 0.4*sin(theta)+0.5;
-        duty2= 0.4*sin(theta+(TWOPI)/3.)+0.5;
-        duty3= 0.4*sin(theta+(2*TWOPI)/3)+0.5;
+        duty2= 0.4*sin(theta+TWOPI/3.0)+0.5;
+        duty3= 0.4*sin(theta+(2*TWOPI)/3.0)+0.5;
         //duty1=0.5;
         //duty2=0.5;
         //duty3=0.5;
-        setDACA(theta/TWOPI);
         //setDACB(theta/TWOPI);
     }
     if (flag == 2){
+        duty1= 0.5*sin(theta)+0.5;
+        duty2= 0.5*sin(theta+(TWOPI)/3.0)+0.5;
+        duty3= 0.5*sin(theta+(2.0*TWOPI)/3.0)+0.5;
+        //clarke_transform(currentFeedback, ialphaBetaGamma);
+        //park_transform(ialphaBetaGamma, idq0, theta);
+        currentFeedback[0]=duty1-0.5;
+        currentFeedback[1]=duty2-0.5;
+        currentFeedback[2]=duty3-0.5;
+        clarke_transform(currentFeedback, ialphaBetaGamma);
+        park_transform(ialphaBetaGamma, idq0, park);
+        //abcDQ0transform(currentFeedback, idq0, theta);
+        setDACA(idq0[0]+1);
+        setDACB(idq0[1]+1);
+        /*
+        idqref[0]=0.5;
+        idqref[1]=0.0;
+        idqref[2]=0.0;
+        invpark_transform(idqref, alphabeta, theta);
+        invclarke_transform(alphabeta, abc);
+        setDACA(abc[0]+1);
+        */
+        //float idqref[3]={0.4,0,0};
+        //float alphabeta[3]={0.0,0.0,0.0};
+        //setDACA(iBFeedback+1.4);
+    }
+    if (flag == 3){
         //theta update BEFORE transforms
 
 
         clarke_transform(currentFeedback, ialphaBetaGamma);
-        park_transform(ialphaBetaGamma, idq0, theta);
+        park_transform(ialphaBetaGamma, idq0, park);
         
         IDerror_current = idRef-idq0[0]; //ID current error
-        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2.0)*(0.00001666666);
+        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2.0)*(0.00005); //delta t is 3/60000 because interrupt called at 20kHz
         IDPIDout=KpID*IDerror_current+IDintegral_current*KiID;
-        VDref=IDPIDout+3.0*TWOPI*60*L*idq0[1];//feed forward compensation
+        VDref=IDPIDout+TWOPI*60*L*idq0[1];//feed forward compensation. dont need x3.0 factor because this is a calculated value not based on speed of calculations
         IDerror_old=IDerror_current;
 
         IQerror_current = iqRef-idq0[1];
         IQintegral_current = iqRef-idq0[1];
-        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2.0)*(0.00001666666);
+        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2.0)*(0.00005);
         IQPIDout=KpIQ*IQerror_current+IQintegral_current*KiIQ;
-        VQref=IQPIDout+3.0*TWOPI*60*L*idq0[0];//feed forward compensation
+        VQref=IQPIDout+TWOPI*60*L*idq0[0];//feed forward compensation
         IQerror_old=IQerror_current;
 
         VDQref[0]=VDref;
         VDQref[1]=VQref;//update VDQref array
         VDQref[2]=0.0;//dont care about 0 component
+
         invpark_transform(VDQref,Valphabeta,theta);
         invclarke_transform(Valphabeta,Vabcref);
         duty1=Vabcref[0]*(1/Vdc) + 0.5;//adjust scaling
@@ -238,6 +288,7 @@ __interrupt void ADCD_ISR(void)
         setDACA(VDQref[0]);
         setDACB(VDQref[1]);
     }
+
 
 
 // you will calculate your controller here and then the final duty percentage need duty offset added to the controller's calculated duty cycle.
@@ -250,6 +301,7 @@ __interrupt void ADCD_ISR(void)
     if (duty2 > 0.9) duty2 = 0.9;
     if (duty3 < 0.1) duty3 = 0.1;
     if (duty3 > 0.9) duty3 = 0.9;
+
     LowRes1 = (uint32_t)(duty1*Period);
     LowRes2 = (uint32_t)(duty2*Period);
     LowRes3 = (uint32_t)(duty3*Period);

@@ -52,7 +52,7 @@ float f = 16666.6666667; //based on Period (freq/10^8)^-1
 float Ki = 1456;
 float reference = 0.4;
 float Kp = 0;
-int flag=4; // start in OL
+int flag=10; // start in OL
 float error_current=0;
 float error_old=0;
 float PIduty=0;
@@ -185,7 +185,7 @@ __interrupt void ADCD_ISR(void)
 
     // Convert ADC current measurements to amps
     iAFeedback = adcd0result*0.00312207-10.8537; //board 1 calibration
-    iBFeedback = adcd1result*0.00485663-16.867; //board 2 calibration is FUCKED
+    iBFeedback = adcd1result*0.00302383-10.6278;
 
     iCFeedback = adcd2result*0.00314864-10.991;//board 3 calibration
 
@@ -204,10 +204,17 @@ __interrupt void ADCD_ISR(void)
         theta = 0.0; //reset theta
     }
     theta_old = theta; //update theta_old AFTER all calculations
+    if (flag == 10){
+        duty1 = 0.5;
+        duty2 = 0.5;
+        duty3 = 0.5;
+    }
     if (flag==1){ //open loop
         duty1= 0.4*cos(theta)+0.5;
         duty2= 0.4*cos(theta-(TWOPI)/3.0)+0.5;
         duty3= 0.4*cos(theta+(TWOPI)/3.0)+0.5;
+        setDACA(currentFeedback[0]+1);
+        setDACB(currentFeedback[2]+1);
     }
     if (flag == 2){ //check if inverse works IT DOES
         VDQref[0]=0.5;
@@ -248,7 +255,7 @@ __interrupt void ADCD_ISR(void)
         park2_transform(ialphaBetaGamma, idq0, outSINE,outCOSINE); //transform measured current to DQ0 domain
 
         IDerror_current = idRef-idq0[0]; //ID current error
-        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old)/2.0)*(0.00005); //integrate ID current error
+        IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old))*(0.000025); //integrate ID current error
         IDPIout=KpID*IDerror_current+IDintegral_current*KiID;//pass through PI controller
         VDQref[0]=IDPIout+TWOPI*60*L*idq0[1];//feedfoward compensation
         //VDQref[0]=IDPIout;//feedfoward compensation
@@ -257,7 +264,7 @@ __interrupt void ADCD_ISR(void)
 
 
         IQerror_current = iqRef-idq0[1];
-        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old)/2.0)*(0.00005);
+        IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old))*(0.000025);
         IQPIout=KpIQ*IQerror_current+IQintegral_current*KiIQ;
         VDQref[1]=IQPIout+TWOPI*60*L*idq0[0];//feed forward compensation
         //VDQref[1]=IQPIout;//feed forward compensation
@@ -268,11 +275,11 @@ __interrupt void ADCD_ISR(void)
 
         invpark_transform(VDQref,Valphabeta,outSINE,outCOSINE);
         invclarke_transform(Valphabeta,Vabcref);
-        duty1=Vabcref[0]*(1/Vdc) + 0.5;
-        duty2=Vabcref[1]*(1/Vdc) + 0.5;
-        duty3=Vabcref[2]*(1/Vdc) + 0.5;
+        duty1=Vabcref[0]*(0.06666666666) + 0.5;
+        duty2=Vabcref[1]*(0.06666666666) + 0.5;
+        duty3=Vabcref[2]*(0.06666666666) + 0.5;
 
-        setDACA(duty1+1);
+        setDACA(idq0[0]);
         setDACB(duty2+1);
     }
 
@@ -312,14 +319,13 @@ __interrupt void ADCD_ISR(void)
         LowRes3 = Period - 1;
     }
     EPwm1Regs.CMPA.bit.CMPA = LowRes1;
-    //EPwm1Regs.CMPC = LowRes/2;
     EPwm1Regs.CMPC = LowRes1/2+sampling_offset; //new line
+
     EPwm2Regs.CMPA.bit.CMPA = LowRes2;
-    //EPwm1Regs.CMPC = LowRes/2;
-    EPwm2Regs.CMPC = LowRes1/2+sampling_offset; //new line
+    EPwm2Regs.CMPC = LowRes2/2+sampling_offset; //new line
+
     EPwm4Regs.CMPA.bit.CMPA = LowRes3;
-    //EPwm1Regs.CMPC = LowRes/2;
-    EPwm4Regs.CMPC = LowRes1/2+sampling_offset; //new line
+    EPwm4Regs.CMPC = LowRes3/2+sampling_offset; //new line
 
     // Change when ADC converts to note that there are incorrect times to sample ADC
     //EPwm1Regs.CMPC = LowRes/16;
@@ -377,11 +383,8 @@ void main(void)
     AdcdRegs.ADCSOC1CTL.bit.ACQPS = 49; //sample window is acqps + 1 SYSCLK cycles = 250ns
     AdcdRegs.ADCSOC1CTL.bit.TRIGSEL = 0x5; // EPWM1 ADCSOCA will trigger SOC1
     AdcdRegs.ADCSOC2CTL.bit.CHSEL = 2;  //set SOC2 to convert pin D2 IDK AHHH
-    AdcdRegs.ADCSOC2CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
+    AdcdRegs.ADCSOC2CTL.bit.ACQPS = 49; //sample window is acqps + 1 SYSCLK cycles = 250ns
     AdcdRegs.ADCSOC2CTL.bit.TRIGSEL = 0x5; // EPwm4 ADCSOCA will trigger SOC2 IDK AHH
-    //AdcdRegs.ADCSOC3CTL.bit.CHSEL = ???;  //set SOC3 to convert pin D3
-    //AdcdRegs.ADCSOC3CTL.bit.ACQPS = 99; //sample window is acqps + 1 SYSCLK cycles = 500ns
-    //AdcdRegs.ADCSOC3CTL.bit.TRIGSEL = ???; // EPWM4 ADCSOCA will trigger SOC3
     AdcdRegs.ADCINTSEL1N2.bit.INT1SEL = 1; //set to SOC1, the last converted, and it will set INT1 flag ADCD1
     AdcdRegs.ADCINTSEL1N2.bit.INT1E = 1;   //enable INT1 flag
     AdcdRegs.ADCINTFLGCLR.bit.ADCINT1 = 1; //make sure INT1 flag is cleared

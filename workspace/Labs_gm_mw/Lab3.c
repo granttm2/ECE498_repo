@@ -95,7 +95,7 @@ __interrupt void ADCD_ISR(void)
         LowRes = Period - 1;
     }
     EPwm1Regs.CMPA.bit.CMPA = LowRes;
-    //EPwm1Regs.CMPC = LowRes/2;
+    EPwm1Regs.CMPC = LowRes/2;
     //EPwm1Regs.CMPC = LowRes/2+sampling_offset; //new line
 
     // Change when ADC converts to note that there are incorrect times to sample ADC

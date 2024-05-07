@@ -45,33 +45,11 @@ int32_t ADCD_count = 0;
 int16_t blue_ratio = 25;
 int16_t red_ratio = 100;
 
-
-//new stuff for PI control
-float Integral_old=0; //initialize old integral to 0
-float f = 16666.6666667; //based on Period (freq/10^8)^-1
-float Ki = 1456;
-float reference = 0.4;
-float Kp = 0;
-int flag=10; // start in OL
-float error_current=0;
-float error_old=0;
-float PIduty=0;
-float Integral_current=0;
-//
-float VoltageFeedback = 0;
-float dacout1 = 0;
-float dacout2 = 0;
-float dacout3 = 0;
 int16_t adcd0result = 0;
 int16_t adcd1result = 0;
 int16_t adcd2result = 0;
 
-float dutyStartOpenLoopStep = 0.4;
-float StepSizeOpenLoop = 0.3;
 float theta_old=0.0;
-
-
-
 
 // Count variables
 uint32_t numSWIcalls = 0;
@@ -85,65 +63,57 @@ float duty3 = 0;
 uint32_t LowRes1 = 0; //a phase
 uint32_t LowRes2 = 0; //b phase
 uint32_t LowRes3 = 0; //c phase
-//uint32_t Period = 1000;  //100Khz
-//uint32_t Period = 5000;  //20Khz
-//uint32_t Period = 2000;  //50Khz
-
-
 uint32_t Period = 1667;  //60Khz    1/Period * 10^8 = frequency
-float dutyoffset = 0.5;
-
 //NEW
 float Ts = 1.0/60000.0; //Switching frequency SET THIS UP
 float Vdc = 15.0; //input voltage
-
-float t=0; //time
 float iAFeedback = 0.0;
 float iBFeedback = 0.0;
 float iCFeedback = 0.0;
+
+//initialize all arrays and couters
 float currentFeedback[3]={0.0,0.0,0.0};
 float ialphaBetaGamma[3]={0.0,0.0,0.0};
 float idq0[3]={0.0,0.0,0.0};
 float Valphabeta[3]={0.0,0.0,0.0};
 float Vabcref[3]={0.0,0.0,0.0};
 float VDQref[3]={0.0,0.0,0.0};
-//float w = 2*PI*60;
+float alphabeta[3]={0.0,0.0,0.0};
+float abc[3]={0.0,0.0,0.0};
 int i =0;
-float IDerror_current = 0.0;//
-float IDintegral_current = 0.0;//
-float IDPIout = 0.0;//
-float VDref = 0.0;//
-float IDerror_old = 0.0;//
-float KpID= 10.0; //set this
-float KiID= 50000.0; //set this
-float KpIQ = 10.0;//set this
-float KiIQ = 50000.0;//set this
-float IDintegral_old = 0.0;
 
-float L= 0.002;//
-float IQerror_current = 0.0;//
-float IQintegral_current = 0.0;//
-float IQintegral_old = 0.0;//
-float IQPIout = 0.0;//'
+//Initialize all variables for control systems
+float IDerror_current = 0.0;
+float IDintegral_current = 0.0;
+float IDPIout = 0.0;
+float VDref = 0.0;
+float IDerror_old = 0.0;
+float KpID= 10.0; //design this
+float KiID= 50000.0; //design this
+float KpIQ = 10.0;//design  this
+float KiIQ = 50000.0;//design  this
+float IDintegral_old = 0.0;
+float L= 0.002;
+float IQerror_current = 0.0;
+float IQintegral_current = 0.0;
+float IQintegral_old = 0.0;
+float IQPIout = 0.0;
 float VQref = 0.0;
 float IQerror_old = 0.0;
+
+//Reference current variables
 float iqRef = 0.0;
-float idRef = 0.4; //change this
-float intermediate1=0.0;
-float intermediate2=0.0;
+float idRef = 0.4; //put this in expression window!
 
 float theta = 0.0;
 float sinTheta=0.0;
 float cosTheta =0.0;
-float idqref[3]={0.4,0,0};
-float alphabeta[3]={0.0,0.0,0.0};
-float abc[3]={0.0,0.0,0.0};
 
+//initialize clarke and inverse clarke arrays
 float clarke[3][3] =  {{0.6666666666666666666666666666,-0.3333333333333333333333333,-0.333333333333333333333333333333},{0.0,0.57735026919,-0.57735026919},{0.3333333333333333333333333333333,0.3333333333333333333333333333,0.33333333333333333333333333}};
-float park[3][3] =  {{0.0,0.0,0.0},{0.0,0.0,0.0},{0.0,0.0,0.0}};
-
 float invclarke[3][3] = {{1,0,1},{-0.5,0.86602540378 , 1},{-0.5,-0.86602540378, 1}}; //amplitude invariant inverse clarke transformation
 
+//setup variables for sine and cosine look up table library
 _iq inputa,inputb,inputc,intheta,outSINE,outCOSINE,cosa_out,cosb_out,cosc_out;
 
 void clarke_transform(float* abc, float* alphabetagamma){//takes in pointer to original and transformed array and applies clarke transform
@@ -184,13 +154,12 @@ __interrupt void ADCD_ISR(void)
     adcd2result = AdcdResultRegs.ADCRESULT2;
 
     // Convert ADC current measurements to amps
-    iAFeedback = adcd0result*0.00312207-10.8537; //board 1 calibration
-    iBFeedback = adcd1result*0.00302383-10.6278;
-
-    iCFeedback = adcd2result*0.00314864-10.991;//board 3 calibration
+    iAFeedback = adcd0result*0.00312207-10.8537; //board 1 calibration (DO THIS)
+    iBFeedback = adcd1result*0.00302383-10.6278; //board 2 calibration (DO THIS)
+    iCFeedback = adcd2result*0.00314864-10.991;//board 3 calibration (DO THIS)
 
     currentFeedback[0]=iAFeedback;
-    currentFeedback[1]=iBFeedback; //=-iAFeedback-iCFeedback if measurement bad
+    currentFeedback[1]=iBFeedback; //=-iAFeedback-iCFeedback if measurements are bad
     currentFeedback[2]=iCFeedback;
 
 
@@ -199,58 +168,25 @@ __interrupt void ADCD_ISR(void)
     intheta=_IQ29(theta);
     outSINE=_IQ29sin(intheta);
     outCOSINE=_IQ29cos(intheta);
-
     if(theta >= 2*PI){
-        theta = 0.0; //reset theta
+        theta = 0.0; //reset theta to prevent overflow
     }
-    theta_old = theta; //update theta_old AFTER all calculations
-    if (flag == 10){
+    theta_old = theta; //update theta_old
+
+    //For calibration of current sensors
+    if (flag == 1){
         duty1 = 0.5;
         duty2 = 0.5;
         duty3 = 0.5;
     }
-    if (flag==1){ //open loop
+    if (flag==2){ //open loop
         duty1= 0.4*cos(theta)+0.5;
         duty2= 0.4*cos(theta-(TWOPI)/3.0)+0.5;
         duty3= 0.4*cos(theta+(TWOPI)/3.0)+0.5;
         setDACA(currentFeedback[0]+1);
-        setDACB(currentFeedback[2]+1);
+        setDACB(currentFeedback[2]+1); //observe the feedback terms, make adjustments if needed
     }
-    if (flag == 2){ //check if inverse works IT DOES
-        VDQref[0]=0.5;
-        VDQref[1]=0.0;
-        VDQref[2]=0.0;
-        invpark_transform(VDQref,Valphabeta,outSINE,outCOSINE);
-        invclarke_transform(Valphabeta,Vabcref);
-        clarke_transform(Vabcref, ialphaBetaGamma);
-        park2_transform(ialphaBetaGamma, idq0,outSINE,outCOSINE);
-        setDACA(Vabcref[0]+1);
-        setDACB(Vabcref[1]+1);
-    }
-
-    if (flag == 3){ //check if forward works
-        inputa=_IQ29(theta);
-        cosa_out=_IQ29cos(inputa);
-        inputb=_IQ29(theta-(TWOPI)/3.0);
-        cosb_out=_IQ29cos(inputb);
-        inputc=_IQ29(theta+(TWOPI)/3.0);
-        cosc_out=_IQ29cos(inputc);
-
-        duty1= 0.5*cosa_out;
-        duty2= 0.5*cosb_out;
-        duty3= 0.5*cosc_out;
-        currentFeedback[0]=duty1;
-        currentFeedback[1]=duty2;
-        currentFeedback[2]=duty3;
-        clarke_transform(currentFeedback, ialphaBetaGamma);
-        park2_transform(ialphaBetaGamma, idq0,outSINE,outCOSINE);
-        //invpark_transform(idq0,Valphabeta,outSINE,outCOSINE);
-        setDACA(idq0[0]);
-        setDACB(idq0[1]);
-
-    }
-
-    if (flag == 4){ //closed loop
+    if (flag == 3){ //closed loop
         clarke_transform(currentFeedback, ialphaBetaGamma);
         park2_transform(ialphaBetaGamma, idq0, outSINE,outCOSINE); //transform measured current to DQ0 domain
 
@@ -258,7 +194,6 @@ __interrupt void ADCD_ISR(void)
         IDintegral_current = IDintegral_old+((IDerror_current+IDerror_old))*(0.000025); //integrate ID current error
         IDPIout=KpID*IDerror_current+IDintegral_current*KiID;//pass through PI controller
         VDQref[0]=IDPIout+TWOPI*60*L*idq0[1];//feedfoward compensation
-        //VDQref[0]=IDPIout;//feedfoward compensation
         IDerror_old=IDerror_current; //update error
         IDintegral_old = IDintegral_current;//update integral
 
@@ -267,28 +202,20 @@ __interrupt void ADCD_ISR(void)
         IQintegral_current = IQintegral_old+((IQerror_current+IQerror_old))*(0.000025);
         IQPIout=KpIQ*IQerror_current+IQintegral_current*KiIQ;
         VDQref[1]=IQPIout+TWOPI*60*L*idq0[0];//feed forward compensation
-        //VDQref[1]=IQPIout;//feed forward compensation
         IQerror_old=IQerror_current;
         IQintegral_old = IQintegral_current;
-
         VDQref[2]=0.0;
 
         invpark_transform(VDQref,Valphabeta,outSINE,outCOSINE);
         invclarke_transform(Valphabeta,Vabcref);
+        
         duty1=Vabcref[0]*(0.06666666666) + 0.5;
         duty2=Vabcref[1]*(0.06666666666) + 0.5;
         duty3=Vabcref[2]*(0.06666666666) + 0.5;
 
-        setDACA(idq0[0]);
-        setDACB(duty2+1);
+        setDACA(idq0[0]); //check the ID signal
     }
-
-
-
-// you will calculate your controller here and then the final duty percentage need duty offset added to the controller's calculated duty cycle.
-
-
-    //limitsx
+    //limits
     if (duty1 < 0.1) duty1 = 0.1;
     if (duty1 > 0.9) duty1 = 0.9;
     if (duty2 < 0.1) duty2 = 0.1;
@@ -300,39 +227,22 @@ __interrupt void ADCD_ISR(void)
     LowRes2 = (uint32_t)(duty2*Period);
     LowRes3 = (uint32_t)(duty3*Period);
 
-    if (LowRes1 < 1) {
-        LowRes1 = 1;
-    }
-    if (LowRes2 < 1) {
-        LowRes2 = 1;
-    }
-    if (LowRes3 < 1) {
-        LowRes3 = 1;
-    }
-    if (LowRes1 > Period - 2) {
-        LowRes1 = Period - 1;
-    }
-    if (LowRes2 > Period - 2) {
-        LowRes2 = Period - 1;
-    }
-    if (LowRes3 > Period - 2) {
-        LowRes3 = Period - 1;
-    }
+    if (LowRes1 < 1) LowRes1 = 1;
+    if (LowRes2 < 1) LowRes2 = 1;
+    if (LowRes3 < 1) LowRes3 = 1;
+    
+    if (LowRes1 > Period - 2) LowRes1 = Period - 1;
+    if (LowRes2 > Period - 2) LowRes2 = Period - 1;
+    if (LowRes3 > Period - 2) LowRes3 = Period - 1;
+
     EPwm1Regs.CMPA.bit.CMPA = LowRes1;
-    EPwm1Regs.CMPC = LowRes1/2+sampling_offset; //new line
+    EPwm1Regs.CMPC = LowRes1/2+sampling_offset; //figure out a way to make feedback less noisy!
 
     EPwm2Regs.CMPA.bit.CMPA = LowRes2;
-    EPwm2Regs.CMPC = LowRes2/2+sampling_offset; //new line
+    EPwm2Regs.CMPC = LowRes2/2+sampling_offset; 
 
     EPwm4Regs.CMPA.bit.CMPA = LowRes3;
-    EPwm4Regs.CMPC = LowRes3/2+sampling_offset; //new line
-
-    // Change when ADC converts to note that there are incorrect times to sample ADC
-    //EPwm1Regs.CMPC = LowRes/16;
-    //EPwm1Regs.CMPC = 0;
-
-    // Here write duty/control effort value to DACA
-
+    EPwm4Regs.CMPC = LowRes3/2+sampling_offset; 
 
     ADCD_count++;
 
@@ -340,15 +250,10 @@ __interrupt void ADCD_ISR(void)
 
     AdcdRegs.ADCINTFLGCLR.bit.ADCINT1 = 1;  //clear interrupt flag
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP1;
-
 }
-
-
-
 
 void main(void)
 {
-
     pre_init();
 
     EALLOW;
@@ -409,7 +314,7 @@ void main(void)
     EPwm1Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
     EPwm1Regs.TBPHS.all = 0;
     EPwm1Regs.TBCTR = 0;
-    EPwm1Regs.TBCTL.bit.PHSEN = 0x0; //enable
+    EPwm1Regs.TBCTL.bit.PHSEN = 0x0; 
     EPwm1Regs.TBCTL.bit.SYNCOSEL = 0x1;  //Disabled because TBCTL2.SYNCOSELX = 0 CHANGE
     EPwm1Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
     EPwm1Regs.TBCTL.bit.CLKDIV = TB_DIV1;
@@ -426,10 +331,10 @@ void main(void)
     EPwm1Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
     EPwm1Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
-// EPWM2A
+    //NEW EPWM CODE
     GPIO_SetupPinMux(2, GPIO_MUX_CPU1, 1); //change this
     GPIO_SetupPinOptions(2, GPIO_OUTPUT, GPIO_PUSHPULL);//change this
-    //EPWM2B
+
     GPIO_SetupPinMux(3, GPIO_MUX_CPU1, 1);//change this
     GPIO_SetupPinOptions(3, GPIO_OUTPUT, GPIO_PUSHPULL);
 
@@ -445,8 +350,8 @@ void main(void)
     EPwm2Regs.CMPC = Period/4;  // This is for ADC trigger and half of CMPA's value so adc not sampled at switching point.
     EPwm2Regs.TBPHS.all = 0;
     EPwm2Regs.TBCTR = 0;
-    EPwm2Regs.TBCTL.bit.PHSEN = 0x1; //SET TO 1 TO SYNCHRONIZE WITH ZERO PHASE
-    EPwm2Regs.TBCTL.bit.SYNCOSEL = 0x3;  //SET TO THREE TO ENABLE SLAVE MODE
+    EPwm2Regs.TBCTL.bit.PHSEN = 0x1; //sync with 0 phase offset
+    EPwm2Regs.TBCTL.bit.SYNCOSEL = 0x3;  //sync with ePWM1
 
     EPwm2Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
     EPwm2Regs.TBCTL.bit.CLKDIV = TB_DIV1;
@@ -463,10 +368,10 @@ void main(void)
     EPwm2Regs.ETSEL.bit.SOCAEN = 1; //enable SOCA
     EPwm2Regs.TBCTL.bit.CTRMODE = TB_COUNT_UP;
 
-// EPwm4A
+    // NEW EPWM SETUP
     GPIO_SetupPinMux(6, GPIO_MUX_CPU1, 1);
     GPIO_SetupPinOptions(6, GPIO_OUTPUT, GPIO_PUSHPULL);
-    //EPwm4B
+
     GPIO_SetupPinMux(7, GPIO_MUX_CPU1, 1);
     GPIO_SetupPinOptions(7, GPIO_OUTPUT, GPIO_PUSHPULL);
 
@@ -483,8 +388,8 @@ void main(void)
     EPwm4Regs.TBPHS.all = 0;
     EPwm4Regs.TBCTR = 0;
     //EPwm4Regs.TBCTL.bit.SWFSYNC = 0x1;  //SET TO THREE TO ENABLE SLAVE MODE
-    EPwm4Regs.TBCTL.bit.PHSEN = 0x1;
-    EPwm4Regs.TBCTL.bit.SYNCOSEL = 0x3;  //Disabled because TBCTL2.SYNCOSELX = 0
+    EPwm4Regs.TBCTL.bit.PHSEN = 0x1;    //sync with 0 phase offset
+    EPwm4Regs.TBCTL.bit.SYNCOSEL = 0x3; //sync with ePWM1
     EPwm4Regs.TBCTL.bit.HSPCLKDIV = TB_DIV1;
     EPwm4Regs.TBCTL.bit.CLKDIV = TB_DIV1;
     EPwm4Regs.CMPCTL.bit.LOADAMODE = CC_CTR_ZERO;
